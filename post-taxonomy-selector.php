@@ -19,6 +19,12 @@ add_action( 'init', 'pts_init' );
 
 function pts_admin_assets() {
 	wp_enqueue_style( 'pts-admin-style', plugin_dir_url( __FILE__ ) . 'assets/admin/css/style.css', null, time() );
+	wp_enqueue_style('pts-select2-css', '//cdn.jsdelivr.net/npm/select2@4.1.0-beta.1/dist/css/select2.min.css');
+	wp_enqueue_script('pts-select2-js', '//cdn.jsdelivr.net/npm/select2@4.1.0-beta.1/dist/js/select2.min.js', array(), '1.0.0', true);
+	wp_enqueue_script( 'pts-admin-main-js', plugin_dir_url( __FILE__ ) . 'assets/admin/js/main.js', array(
+		'jquery',
+		'pts-select2-js'
+	), time(), true );
 }
 
 function pts_load_textdomain() {
@@ -30,7 +36,7 @@ add_action( 'plugins_loaded', 'pts_load_textdomain' );
 function pts_add_metabox() {
 	add_meta_box(
 		'pts_select_post',
-		__( 'Select Posts', 'post-taxonomy-selector' ),
+		__( 'Post & Taxonomy Selector Metabox', 'post-taxonomy-selector' ),
 		'pts_display_metabox',
 		array( 'page' )
 	);
@@ -40,22 +46,36 @@ add_action( 'load-post.php', 'pts_add_metabox' );
 
 
 function pts_display_metabox( $post ) {
-	$selected_post_id = get_post_meta( $post->ID, 'pts_select_post', true );
+	$selected_post_id          = get_post_meta( $post->ID, 'pts_select_post', true );
+	$selected_multiple_post_id = get_post_meta( $post->ID, 'pts_select_multiple_posts', true );
+	$selected_multiple_post_id = $selected_multiple_post_id ? $selected_multiple_post_id : array();
+//	print_r($selected_multiple_post_id);
+//	wp_die();
 	wp_nonce_field( 'pts_posts', 'pts_posts_nonce' );
-	$label         = __( 'Select Post', 'post-taxonomy-selector' );
-	$args          = array(
+	$label          = __( 'Select Post', 'post-taxonomy-selector' );
+	$label2         = __( 'Select Multiple Posts', 'post-taxonomy-selector' );
+	$args           = array(
 		'post_type'     => 'post',
 		'post_per_page' => - 1
 	);
-	$_post         = new wp_query( $args );
-	$dropdown_list = "";
+	$_post          = new wp_query( $args );
+	$dropdown_list  = "";
+	$dropdown_list2 = "";
 	while ( $_post->have_posts() ) {
-		$extra = "";
+		$selected = "s";
 		$_post->the_post();
 		if ( get_the_ID() == $selected_post_id ) {
-			$extra = "selected";
+			$selected = "selected";
 		}
-		$dropdown_list .= sprintf( '<option %s value="%s">%s</option>', esc_attr( $extra ), esc_attr( get_the_ID() ), esc_html( get_the_title() ) );
+		$dropdown_list .= sprintf( '<option %s value="%s">%s</option>', esc_attr( $selected ), esc_attr( get_the_ID() ), esc_html( get_the_title() ) );
+
+
+		if ( in_array( get_the_ID(), $selected_multiple_post_id ) ) {
+			$selected = "selected";
+		} else {
+			$selected = "";
+		}
+		$dropdown_list2 .= sprintf( '<option %s value="%s">%s</option>', esc_attr( $selected ), esc_attr( get_the_ID() ), esc_html( get_the_title() ) );
 	}
 	wp_reset_query();
 	$metabox_html = <<<EOD
@@ -72,7 +92,20 @@ function pts_display_metabox( $post ) {
 		</div>
 		<div class="float-clear"></div>
 	</div>
+	<div class="field_c">
+		<div class="label_c">
+			<label for="pts_posts">{$label2}</label>
+		</div>
+		<div class="input_c">
+		    <select multiple="multiple" name="pts_posts[]" id="pts_posts">
+		        <option value="0">{$label2}</option>
+		        {$dropdown_list2}
+            </select>
+		</div>
+		<div class="float-clear"></div>
+	</div>
 </div>
+
 EOD;
 	echo $metabox_html;
 }
@@ -87,6 +120,12 @@ function pts_save_select_post_metavalue( $post_id ) {
 	if ( $selected_post_id > 0 ) {
 		update_post_meta( $post_id, 'pts_select_post', $selected_post_id );
 	}
+
+	$selected_multiple_posts_id = $_POST['pts_posts'];
+	if ( $selected_multiple_posts_id != null ) {
+		update_post_meta( $post_id, 'pts_select_multiple_posts', $selected_multiple_posts_id );
+	}
+
 
 	return $post_id;
 
